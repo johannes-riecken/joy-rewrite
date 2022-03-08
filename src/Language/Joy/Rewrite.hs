@@ -18,6 +18,8 @@ import Text.Parsec hiding ((<|>), many)
 import Text.Parsec.Error
 import Text.Parsec.Pos
 
+type Error = String
+
 -- A rewrite rule matches a pattern and tries to rewrite it with the
 -- replacement. If there is a condition attached, the rewriting will only happen
 -- if the rewrite given in the condition can happen based on known rewrite
@@ -35,8 +37,12 @@ data Condition = Condition
   }
   deriving Show
 
+convertError :: Either ParseError a -> Either Error a
+convertError (Left x) = Left $ show x
+convertError (Right x) = Right x
+
 -- Construct a Rule by parsing a string like "a b swap => b a"
-mkRule :: String -> Either ParseError Rule
+mkRule :: String -> Either Error Rule
 mkRule xs = do
   xs' <- tokenizeRule xs
   if CondSep `elem` xs'
@@ -47,14 +53,15 @@ mkRule xs = do
       (a, b) <- tokenizeFromTo xs
       pure $ Rule a b Nothing where
 
-  tokenizeFromTo :: String -> Either ParseError ([RuleExpr String], [RuleExpr String])
+  tokenizeFromTo :: String -> Either Error ([RuleExpr String], [RuleExpr String])
   tokenizeFromTo = fmap (cut RuleSep) . tokenizeRule
 
+  -- TODO: This crashes for empty lists
   cut :: Eq a => a -> [a] -> ([a], [a])
   cut sep = second tail . break (== sep)
 
-  tokenizeRule :: String -> Either ParseError [RuleExpr String]
-  tokenizeRule = parse parser ""   where
+  tokenizeRule :: String -> Either Error [RuleExpr String]
+  tokenizeRule = convertError . parse parser ""   where
     parser =
       let metaVar     = MetaVar <$> fmap pure lower
           metaListVar = MetaListVar <$> fmap pure upper
@@ -90,12 +97,12 @@ type RuleMap a = Map (RuleExpr a) [a]
 -- (so the return type probably shouldn't contain `ParseError`, but a more
 -- generic `Error`. In that case I think I'd still need the (now useless)
 -- unfoldrM.
-rewrite :: [String] -> String -> Either ParseError [String]
+rewrite :: [String] -> String -> Either Error [String]
 rewrite ruleStrs code = do
   rs <- traverse mkRule ruleStrs
   rewrite' rs (tokenize code) where
 
-  rewrite' :: [Rule] -> [String] -> Either ParseError [String]
+  rewrite' :: [Rule] -> [String] -> Either Error [String]
   rewrite' rules = fmap concat . unfoldrM
     (\case
       [] -> Right Nothing
@@ -128,8 +135,8 @@ rewrite ruleStrs code = do
   -- Matches the pattern part of a rule. I didn't find anything like `runState`
   -- for Parsec, so I return both the value and the state in the same tuple
   -- format.
-  matchPat :: Rule -> [String] -> Either ParseError ([String], RuleMap String)
-  matchPat r = runParser
+  matchPat :: Rule -> [String] -> Either Error ([String], RuleMap String)
+  matchPat r = convertError . runParser
     (do
       x <- mkParser (pat r)
       y <- getState
@@ -139,10 +146,10 @@ rewrite ruleStrs code = do
     ""
 
   matchConclusion
-    :: Rule -> [String] -> Either ParseError ([String], RuleMap String)
+    :: Rule -> [String] -> Either Error ([String], RuleMap String)
   matchConclusion r xs = do
     conc <- conclusion <$> maybeToParseResult (condition r)
-    runParser
+    convertError $ runParser
       (do
         x <- mkParser conc
         y <- getState
@@ -153,8 +160,8 @@ rewrite ruleStrs code = do
       xs where
     -- I think this is also a clear case where I should use a more generic error
     -- type.
-    maybeToParseResult :: Maybe a -> Either ParseError a
-    maybeToParseResult = maybe (Left $ newErrorMessage (Message "") (newPos "" 0 0)) Right
+    maybeToParseResult :: Maybe a -> Either Error a
+    maybeToParseResult = maybe (Left "") Right
 
   mkParser :: [RuleExpr String] -> Parsec [String] (RuleMap String) [String]
   mkParser = foldr
