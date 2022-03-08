@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
-{-# LANGUAGE LambdaCase, FlexibleContexts #-}
+{-# LANGUAGE DeriveFunctor, FlexibleContexts, LambdaCase, OverloadedStrings #-}
 module Language.Joy.Rewrite
   ( rewrite
   , tokenize
@@ -11,36 +11,38 @@ import Control.Monad
 import Control.Monad.Loops
 import Data.Foldable (asum)
 import Data.List
+import qualified Data.Text as T
+import Data.Text (Text(..))
 import qualified Data.Map as M
 import Data.Map (Map)
 import Test.Hspec
 import Text.Parsec hiding ((<|>), many)
 
-type Error = String
+type Error = Text
 
 -- A rewrite rule matches a pattern and tries to rewrite it with the
 -- replacement. If there is a condition attached, the rewriting will only happen
 -- if the rewrite given in the condition can happen based on known rewrite
 -- rules.
 data Rule = Rule
-  { pat       :: [RuleExpr String]
-  , repl      :: [RuleExpr String]
+  { pat       :: [RuleExpr Text]
+  , repl      :: [RuleExpr Text]
   , condition :: Maybe Condition
   }
   deriving Show
 
 data Condition = Condition
-  { premise    :: [RuleExpr String]
-  , conclusion :: [RuleExpr String]
+  { premise    :: [RuleExpr Text]
+  , conclusion :: [RuleExpr Text]
   }
   deriving Show
 
 convertError :: Either ParseError a -> Either Error a
-convertError (Left x) = Left $ show x
+convertError (Left x) = Left . T.pack $ show x
 convertError (Right x) = Right x
 
 -- Construct a Rule by parsing a string like "a b swap => b a"
-mkRule :: String -> Either Error Rule
+mkRule :: Text -> Either Error Rule
 mkRule xs = do
   xs' <- tokenizeRule xs
   if CondSep `elem` xs'
@@ -53,15 +55,15 @@ mkRule xs = do
       (a, b) <- tokenizeFromTo xs
       pure $ Rule a b Nothing where
 
-  tokenizeFromTo :: String -> Either Error ([RuleExpr String], [RuleExpr String])
+  tokenizeFromTo :: Text -> Either Error ([RuleExpr Text], [RuleExpr Text])
   tokenizeFromTo xs = tokenizeRule xs >>= cut RuleSep
 
   cut :: Eq a => a -> [a] -> Either Error ([a], [a])
   cut _ [] = Left "tried to cut empty list"
   cut sep xs = Right . second tail . break (== sep) $ xs
 
-  tokenizeRule :: String -> Either Error [RuleExpr String]
-  tokenizeRule = convertError . parse parser ""   where
+  tokenizeRule :: Text -> Either Error [RuleExpr Text]
+  tokenizeRule = convertError . fmap (fmap (fmap T.pack)) . parse parser "" . T.unpack   where
     parser =
       let metaVar     = MetaVar <$> fmap pure lower
           metaListVar = MetaListVar <$> fmap pure upper
@@ -86,19 +88,19 @@ data RuleExpr a =
     | MetaListVar a -- matches a list of atoms and assigns it to the variable name
     | RuleSep -- "=>"
     | CondSep -- ":-" (read as "if")
-    deriving (Show, Eq, Ord)
+    deriving (Show, Eq, Ord, Functor)
 
 -- Stores the associations between rule variables and their matched Joy code
 type RuleMap a = Map (RuleExpr a) [a]
 
 -- Given a list of rewrite rules and Joy code, apply the rules and get the resulting
 -- list of tokens
-rewrite :: [String] -> String -> Either Error [String]
+rewrite :: [Text] -> Text -> Either Error [Text]
 rewrite ruleStrs code = do
   rs <- traverse mkRule ruleStrs
   rewrite' rs (tokenize code) where
 
-  rewrite' :: [Rule] -> [String] -> Either Error [String]
+  rewrite' :: [Rule] -> [Text] -> Either Error [Text]
   rewrite' rules = fmap concat . unfoldrM
     (\case
       [] -> Right Nothing
@@ -126,13 +128,13 @@ rewrite ruleStrs code = do
     )
 
   -- Applies the stored rewrite associations to Joy code.
-  apply :: RuleMap String -> [RuleExpr String] -> [String]
+  apply :: RuleMap Text -> [RuleExpr Text] -> [Text]
   apply m = (=<<) (\x -> M.findWithDefault [(\case (Var x') -> x') x] x m)
 
   -- Matches the pattern part of a rule. I didn't find anything like `runState`
   -- for Parsec, so I return both the value and the state in the same tuple
   -- format.
-  matchPat :: Rule -> [String] -> Either Error ([String], RuleMap String)
+  matchPat :: Rule -> [Text] -> Either Error ([Text], RuleMap Text)
   matchPat r = convertError . runParser
     (do
       x <- mkParser (pat r)
@@ -143,7 +145,7 @@ rewrite ruleStrs code = do
     ""
 
   matchConclusion
-    :: Rule -> [String] -> Either Error ([String], RuleMap String)
+    :: Rule -> [Text] -> Either Error ([Text], RuleMap Text)
   matchConclusion r xs = do
     conc <- conclusion <$> maybeToParseResult (condition r)
     convertError $ runParser
@@ -160,7 +162,7 @@ rewrite ruleStrs code = do
     maybeToParseResult :: Maybe a -> Either Error a
     maybeToParseResult = maybe (Left "") Right
 
-  mkParser :: [RuleExpr String] -> Parsec [String] (RuleMap String) [String]
+  mkParser :: [RuleExpr Text] -> Parsec [Text] (RuleMap Text) [Text]
   mkParser = foldr
     (\x acc -> case x of
       Var x' -> do
@@ -182,17 +184,17 @@ rewrite ruleStrs code = do
     )
     (pure [])
 
-tokenize :: String -> [String]
-tokenize = filter (not . null) . tokenize' where
+tokenize :: Text -> [Text]
+tokenize = filter (not . T.null) . tokenize' where
 
-  tokenize' :: String -> [String]
+  tokenize' :: Text -> [Text]
   tokenize' = unfoldr
-    (\case
-      []         -> Nothing
-      ('[' : xs) -> Just ("[", xs)
-      (']' : xs) -> Just ("]", xs)
-      xxs        -> Just (a, dropWhile (== ' ') b)
-        where (a, b) = break (`elem` "[] ") xxs
+    (\xxs -> case T.uncons xxs of
+      Nothing        -> Nothing
+      Just ('[', xs) -> Just ("[", xs)
+      Just (']', xs) -> Just ("]", xs)
+      Just _   -> Just (a, T.dropWhile (== ' ') b)
+        where (a, b) = T.break (`elem` ("[] " :: String)) xxs
     )
 
 -- I ended these with an apostrophe, because they work on tokens, not Strings.
@@ -206,8 +208,8 @@ satisfy' p = tokenPrim showTok posFromTok testTok
 char' :: (Eq a, Show a) => a -> Parsec [a] u a
 char' x = satisfy' (== x) <?> show x
 
-nonBracket' :: Parsec [String] u String
+nonBracket' :: Parsec [Text] u Text
 nonBracket' = satisfy' (`notElem` ["[", "]"])
 
-nonTrueNonBracket' :: Parsec [String] u String
+nonTrueNonBracket' :: Parsec [Text] u Text
 nonTrueNonBracket' = satisfy' (`notElem` ["[", "]", "true"])
