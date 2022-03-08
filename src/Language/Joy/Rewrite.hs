@@ -15,8 +15,6 @@ import qualified Data.Map as M
 import Data.Map (Map)
 import Test.Hspec
 import Text.Parsec hiding ((<|>), many)
-import Text.Parsec.Error
-import Text.Parsec.Pos
 
 type Error = String
 
@@ -47,18 +45,20 @@ mkRule xs = do
   xs' <- tokenizeRule xs
   if CondSep `elem` xs'
     then do
-      let ((a, b), (c, d)) = ((cut RuleSep *** cut RuleSep) . cut CondSep) xs'
+      (v,w) <- cut CondSep xs'
+      (a,b) <- cut RuleSep v
+      (c,d) <- cut RuleSep w
       pure $ Rule a b (Just $ Condition c d)
     else do
       (a, b) <- tokenizeFromTo xs
       pure $ Rule a b Nothing where
 
   tokenizeFromTo :: String -> Either Error ([RuleExpr String], [RuleExpr String])
-  tokenizeFromTo = fmap (cut RuleSep) . tokenizeRule
+  tokenizeFromTo xs = tokenizeRule xs >>= cut RuleSep
 
-  -- TODO: This crashes for empty lists
-  cut :: Eq a => a -> [a] -> ([a], [a])
-  cut sep = second tail . break (== sep)
+  cut :: Eq a => a -> [a] -> Either Error ([a], [a])
+  cut _ [] = Left "tried to cut empty list"
+  cut sep xs = Right . second tail . break (== sep) $ xs
 
   tokenizeRule :: String -> Either Error [RuleExpr String]
   tokenizeRule = convertError . parse parser ""   where
@@ -93,10 +93,6 @@ type RuleMap a = Map (RuleExpr a) [a]
 
 -- Given a list of rewrite rules and Joy code, apply the rules and get the resulting
 -- list of tokens
--- TODO: Handle all the edge cases and give back as much error info as possible
--- (so the return type probably shouldn't contain `ParseError`, but a more
--- generic `Error`. In that case I think I'd still need the (now useless)
--- unfoldrM.
 rewrite :: [String] -> String -> Either Error [String]
 rewrite ruleStrs code = do
   rs <- traverse mkRule ruleStrs
@@ -121,8 +117,9 @@ rewrite ruleStrs code = do
                           Right x' -> case matchConclusion r x' of
                             Right (_, m') -> Just (replTokens, drop (length s) xxs)
                               where replTokens = apply (M.union m m') $ repl r
-                            Left err' -> error (show err')
-                    Left _ -> Nothing
+                            _ -> Nothing
+                          _ -> Nothing
+                    _ -> Nothing
                   ) rules
                 )
           <|> Just ([x], xs)
@@ -180,6 +177,8 @@ rewrite ruleStrs code = do
         x'' <- many nonTrueNonBracket'
         modifyState $ M.insert (MetaListVar x') x''
         (x'' ++) <$> acc
+      RuleSep -> error "assertion error: RuleSep found by mkParser"
+      CondSep -> error "assertion error: CondSep found by mkParser"
     )
     (pure [])
 
