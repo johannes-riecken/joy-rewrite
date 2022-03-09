@@ -1,6 +1,13 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -fno-warn-type-defaults #-}
 {-# LANGUAGE DeriveFunctor, FlexibleContexts, LambdaCase, OverloadedStrings #-}
+-- |
+-- Maintainer  :  Johannes Riecken <johannes.riecken@gmail.com>
+-- Stability   :  experimental
+-- Portability :  non-portable
+--
+-- This module includes combinators for rewriting Joy source code.
+----------------------------------------------------------------------------
 module Language.Joy.Rewrite
   ( rewrite
   , tokenize
@@ -18,6 +25,7 @@ import Data.Map (Map)
 import Test.Hspec
 import Text.Parsec hiding ((<|>), many)
 
+-- | Error is a generic error type.
 type Error = Text
 
 -- A rewrite rule matches a pattern and tries to rewrite it with the
@@ -93,8 +101,8 @@ data RuleExpr a =
 -- Stores the associations between rule variables and their matched Joy code
 type RuleMap a = Map (RuleExpr a) [a]
 
--- Given a list of rewrite rules and Joy code, apply the rules and get the resulting
--- list of tokens
+-- | Given a list of rewrite rules and Joy code, apply the rules and return the resulting
+--   list of tokens.
 rewrite :: [Text] -> Text -> Either Error [Text]
 rewrite ruleStrs code = do
   rs <- traverse mkRule ruleStrs
@@ -184,6 +192,7 @@ rewrite ruleStrs code = do
     )
     (pure [])
 
+-- | Split Joy code into tokens.
 tokenize :: Text -> [Text]
 tokenize = filter (not . T.null) . tokenize' where
 
