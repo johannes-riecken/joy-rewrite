@@ -52,12 +52,12 @@ library
 
     -- Other library packages from which modules are imported.
     build-depends:
-      base ^>=4.14.3.0,
-      containers ^>= 0.6.5.1,
+      base >= 4.9.1.0 && < 4.17,
+      containers >= 0.5.7.1 && < 0.7,
       monad-loops ^>= 0.4.3,
       hspec ^>= 2.8.3,
-      parsec ^>= 3.1.14.0,
-      text ^>= 1.2.4
+      parsec ^>= 3.1.13.0,
+      text ^>= 1.2.3.1
 
     -- Directories containing source files.
     hs-source-dirs:   src
@@ -80,6 +80,6 @@ test-suite joy-rewrite-test
 
     -- Test dependencies.
     build-depends:
-      base ^>=4.14.3.0,
+      base >= 4.9.1.0 && < 4.17,
       joy-rewrite,
       hspec ^>= 2.8.3
