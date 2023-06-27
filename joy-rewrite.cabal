@@ -41,6 +41,21 @@ source-repository head
   type: git
   location: https://github.com/johannes-riecken/joy-rewrite.git
 
+executable joy-rewrite
+    build-depends:
+      base >= 4.9.1.0 && < 4.18,
+      containers >= 0.5.7.1 && < 0.7,
+      directory ^>= 1.3.7.1,
+      monad-loops ^>= 0.4.3,
+      hspec >= 2.8.3 && < 2.11,
+      parsec ^>= 3.1.13.0,
+      temporary ^>= 1.3,
+      text >= 1.2.3.1 && < 2.1
+    other-modules: Language.Joy.Rewrite
+    hs-source-dirs: src
+    main-is: Main.hs
+    default-language: Haskell2010
+
 library
     exposed-modules:  Language.Joy.Rewrite
 
@@ -54,9 +69,10 @@ library
     build-depends:
       base >= 4.9.1.0 && < 4.18,
       containers >= 0.5.7.1 && < 0.7,
-      monad-loops ^>= 0.4.3,
       hspec >= 2.8.3 && < 2.11,
+      monad-loops ^>= 0.4.3,
       parsec ^>= 3.1.13.0,
+      temporary ^>= 1.3,
       text >= 1.2.3.1 && < 2.1
 
     -- Directories containing source files.

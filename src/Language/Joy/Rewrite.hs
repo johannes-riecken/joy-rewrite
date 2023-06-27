@@ -16,13 +16,11 @@ import Control.Applicative
 import Control.Arrow
 import Control.Monad
 import Control.Monad.Loops
-import Data.Foldable (asum)
 import Data.List
 import qualified Data.Text as T
-import Data.Text (Text(..))
+import Data.Text (Text)
 import qualified Data.Map as M
 import Data.Map (Map)
-import Test.Hspec
 import Text.Parsec hiding ((<|>), many)
 
 -- | Error is a generic error type.
