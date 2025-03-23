@@ -1,0 +1,116 @@
+a [P] dip => P a
+a b swap => b a
+newstack newstack => newstack
+P newstack => newstack
+newstack stack => newstack []
+[] unstack => newstack
+newstack L => [L] reverse unstack
+a pop => id
+a dup => a a
+[*] first dup => [*] first [*] first
+a b swap => b a
+a b popd => b
+a b dupd => a a b
+a b c swapd => b a c
+a b c rollup => c a b
+a b c rolldown => b c a
+a b c rotate => c b a
+true a b choice => a
+false a b choice => b
+[a L] first => a
+[a b L] second => b
+[a b c L] third => c
+[a L] rest => [L]
+"cS" first => 'c
+"cS" rest => "S"
+{a S} first => a
+{a S} rest => {S}
+a [L] cons => [a L]
+[L] a swons => [a L]
+[a L] uncons => a [L]
+[a L] unswons => [L] a
+'c "S" cons => "cS"
+{S} a swons => {a S}
+{a S} uncons => a {S}
+[a L] 1 at => a
+[a L] n at => b :- [L] n 1 - at => b
+1 {a S} of => a
+n {a S} of => b :- n 1 - {S} of => b
+[] size => 0
+[a L] size => n 1 + :- L size => n
+[] reverse => []
+[a L] reverse => [M a] :- [L] reverse => [M]
+reverse => [] swap shunt
+[L] [] shunt => [L]
+[L] [a M] shunt => [a L] [M] shunt
+[] [L] concat => [L]
+[a L] [M] concat => [a N] :- [L] [M] concat => [N]
+[] null => true
+[a L] null => false
+[] small => true
+[a] small => true
+[a b L] small => false
+a [] in => false
+a [a L] in => true
+a [b L] in => a [L] in
+[] a has => false
+[a L] a has => true
+[b L] a has => [L] a has
+[P] i => P
+[P] x => [P] P
+a [P] dip => P a
+a b [P] dip2 => P a b
+a b c [P] dip3 => P a b c
+L [P] nullary => L a :- L P => M a
+L b [P] unary => L a :- L b P => M a
+L b c [P] binary => L a :- L b c P => M a
+L b c d [P] ternary => L a :- L b c d P => M a
+L a [P] app1 => L a' :- L a P => M a'
+L a b [P] app2 => L a' b' :- L a P => M a', L b P => N b'
+L a b c [P] app3 => L a' b' c' :- L a P => M a', L b P => N b', L c P => O c'
+[P] [Q] b => P Q
+L [I] [T] [E] ifte => L T :- L I => M true
+L [I] [T] [E] ifte => L E :- L I => M false
+L [W] [D] whiledo => L :- L W => M false
+L [W] [D] whiledo => L D [W] [D] whiledo :- L W => M true
+L [I] [T] [R] tailrec => L T :- L I => M true
+L [I] [T] [R] tailrec => L R [I] [T] [R] tailrec :- L I => M false
+L [I] [T] [R1] [R2] linrec => L T :- L I => M true
+L [I] [T] [R1] [R2] linrec => L R1 [I] [T] [R1] [R2] linrec R2 :- L I => M false
+L [I] [T] [R1] [R2] binrec => L T :- L I => M true
+L [I] [T] [R1] [R2] binrec => L a b R2 :- L T => M false, L R1 [I] [T] [R1] [R2] binrec => N a b
+L [I] [T] [R1] [R2] genrec => L T :- L I => M true
+L [I] [T] [R1] [R2] genrec => L R1 [[I] [T] [R1] [R2] genrec] R2 :- L I => M false
+L [ [[I1] T1] REST ] cond => L T1 :- L I1 => M true
+L [ [[I1] T1] REST ] cond => L [ REST ] cond :- L I1 => M false
+true [P] [Q] branch => P
+false [P] [Q] branch => Q
+0 [P] times => id
+n [P] times => P (n-1) [P] times
+L [M] [P] infra => L [N] :- [M] unstack P => N
+0 [T] [R2] primrec => pop T
+i [T] [R2] primrec => i dup pred [T] [R2] primrec R2
+[] [T] [R2] primrec => pop T
+[a L] [T] [R2] primrec => a [L] [T] [R2] primrec R2
+[] [P] step => id
+K [a L] [P] step => M [L] [P] step :- K a P => M
+[] [P] map => []
+K [a L] [P] map => K [b M] :- K a P => K b, K [L] [P] map => K M
+[] [P] filter => []
+K [a L] [P] filter => K [a M] :- K a P => J true, K [L] [P] filter => K [M]
+K [a L] [P] filter => K [M] :- K a P => J false, K [L] [P] filter => K [M]
+[] [P] split => []
+K [a L] [P] split => K [a M] [N] :- K a P => J true, K [L] [P] split => K [M] [N]
+K [a L] [P] split => K [M] [a N] :- K a P => J false, K [L] [P] split => K [M] [N]
+[] a [P] fold => a
+[b L] a [P] fold => d :- a b P => c, [L] a [P] fold c P => d
+[] [P] some => false
+L [a A] [P] some => L true :- L a P => M true
+L [a A] [P] some => L [A] [P] some :- L a P => M false
+[] [P] all => true
+L [a A] [P] all => L false :- L a P => M false
+L [a A] [P] all => L [A] [P] all :- L a P => M true
+[] [A] [P] zipwith => []
+[A] [] [P] zipwith => []
+L [a A] [b B] [P] zipwith => L [c C] :- L a b P => M c,
+L [A] [B] [P] zipwith => L [C]

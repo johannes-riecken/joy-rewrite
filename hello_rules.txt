@@ -1,0 +1,9 @@
+a b swap => b a
+[] [M] concat => [M]
+[a L] [M] concat => [a N] :- [L] [M] concat => [N]
+a a = => true
+L [I] [T] [E] ifte => L T :- L I => M true
+a [P] dip => P a
+[ ] unstack => newstack
+[a b L] second => b
+[a L] 1 at => a

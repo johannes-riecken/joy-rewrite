@@ -1,0 +1,27 @@
+# pythagoras calculates the length of hypotenuse c given a and b
+def pythagoras(a, b):
+    return sqrt(a * a + b * b)
+
+# convert to three-address code
+def pythagoras(a, b):
+    asq = a * a
+    bsq = b * b
+    csq = asq + bsq
+    c = sqrt(csq)
+    return c
+
+# convert to Joy
+# push a and b onto stack
+a b
+# store a * a onto stack (recognizing that a is unused after this)
+a b dig1 dup *
+==
+b asq
+# store b * b onto stack
+b asq dig1 dup *
+asq bsq
+# calculate csq
+asq bsq +
+csq
+# take square root
+csq sqrt

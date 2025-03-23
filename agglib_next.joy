@@ -1,0 +1,11 @@
+unitset == {} cons;
+unitstring == "" cons;
+pairset == {} cons cons;
+string2set == {} swap shunt;
+elements == {} swap [swons] step;
+set2string == "" [[chr] dip cons] foldr;
+pairstring == "" cons cons;
+from-to-set == {} from-to;
+from-to-string == "" from-to;
+variance == 0.0 swap dup [sum] [size] cleave dup [ / [ - dup * + ] cons step ] dip pred / ;
+
