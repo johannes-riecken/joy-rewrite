@@ -15,15 +15,30 @@ module Language.Joy.Rewrite
 import Control.Applicative
 import Control.Arrow
 import Control.Monad
-import Control.Monad.Loops
 import Data.Foldable (asum)
 import Data.List
 import qualified Data.Text as T
 import Data.Text (Text(..))
 import qualified Data.Map as M
 import Data.Map (Map)
-import Test.Hspec
 import Text.Parsec hiding ((<|>), many)
+--
+-- |See 'Data.List.unfoldr'.  This is a monad-friendly version of that.
+unfoldrM :: (Monad m) => (a -> m (Maybe (b,a))) -> a -> m [b]
+unfoldrM = unfoldrM'
+
+-- |See 'Data.List.unfoldr'.  This is a monad-friendly version of that, with a
+-- twist.  Rather than returning a list, it returns any MonadPlus type of your
+-- choice.
+unfoldrM' :: (Monad m, MonadPlus f) => (a -> m (Maybe (b,a))) -> a -> m (f b)
+unfoldrM' f = go
+    where go z = do
+            x <- f z
+            case x of
+                Nothing         -> return mzero
+                Just (x, z')    -> do
+                        xs <- go z'
+                        return (return x `mplus` xs)
 
 -- | Error is a generic error type.
 type Error = Text
@@ -44,6 +59,15 @@ data Condition = Condition
   , conclusion :: [RuleExpr Text]
   }
   deriving Show
+
+-- An atom in a Rule
+data RuleExpr a =
+      Var a -- matches with one exact atom, e.g. "swap"
+    | MetaVar a -- can match with any single atom and assign it to the variable name
+    | MetaListVar a -- matches a list of atoms and assigns it to the variable name
+    | RuleSep -- "=>"
+    | CondSep -- ":-" (read as "if")
+    deriving (Show, Eq, Ord, Functor)
 
 convertError :: Either ParseError a -> Either Error a
 convertError (Left x) = Left . T.pack $ show x
@@ -89,17 +113,22 @@ mkRule xs = do
           condSep = CondSep <$ string ":-"
       in  sepBy (try var <|> metaVar <|> metaListVar <|> ruleSep <|> condSep) spaces
 
--- An atom in a Rule
-data RuleExpr a =
-      Var a -- matches with one exact atom, e.g. "swap"
-    | MetaVar a -- can match with any single atom and assign it to the variable name
-    | MetaListVar a -- matches a list of atoms and assigns it to the variable name
-    | RuleSep -- "=>"
-    | CondSep -- ":-" (read as "if")
-    deriving (Show, Eq, Ord, Functor)
-
 -- Stores the associations between rule variables and their matched Joy code
 type RuleMap a = Map (RuleExpr a) [a]
+
+-- | Split Joy code into tokens.
+tokenize :: Text -> [Text]
+tokenize = filter (not . T.null) . tokenize' where
+
+  tokenize' :: Text -> [Text]
+  tokenize' = unfoldr
+    (\xxs -> case T.uncons xxs of
+      Nothing        -> Nothing
+      Just ('[', xs) -> Just ("[", xs)
+      Just (']', xs) -> Just ("]", xs)
+      Just _   -> Just (a, T.dropWhile (== ' ') b)
+        where (a, b) = T.break (`elem` ("[] " :: String)) xxs
+    )
 
 -- | Given a list of rewrite rules and Joy code, apply the rules and return the resulting
 --   list of tokens.
@@ -117,7 +146,7 @@ rewrite ruleStrs code = do
                     Right (s, m) -> do
                       case condition r of
                         Nothing -> Just (concatMap (\k -> case k of
-                            Var k' -> M.findWithDefault [k'] k m
+                            Var k' -> [k']
                             _      -> m M.! k
                             )
                             (repl r)
@@ -140,8 +169,8 @@ rewrite ruleStrs code = do
   apply m = (=<<) (\x -> M.findWithDefault [(\case (Var x') -> x') x] x m)
 
   -- Matches the pattern part of a rule. I didn't find anything like `runState`
-  -- for Parsec, so I return both the value and the state in the same tuple
-  -- format.
+  -- for Parsec, so I return both the value and the state (i.e. the rule
+  -- variable bindings) in the same tuple format.
   matchPat :: Rule -> [Text] -> Either Error ([Text], RuleMap Text)
   matchPat r = convertError . runParser
     (do
@@ -174,7 +203,6 @@ rewrite ruleStrs code = do
   mkParser = foldr
     (\x acc -> case x of
       Var x' -> do
-        modifyState $ M.insert (Var x') [x']
         (:) <$> char' x' <*> acc
       MetaVar x' -> do
         -- `nonBracket'` and `nonTrueNonBracket'` are hacks because I couldn't
@@ -191,20 +219,6 @@ rewrite ruleStrs code = do
       CondSep -> error "assertion error: CondSep found by mkParser"
     )
     (pure [])
-
--- | Split Joy code into tokens.
-tokenize :: Text -> [Text]
-tokenize = filter (not . T.null) . tokenize' where
-
-  tokenize' :: Text -> [Text]
-  tokenize' = unfoldr
-    (\xxs -> case T.uncons xxs of
-      Nothing        -> Nothing
-      Just ('[', xs) -> Just ("[", xs)
-      Just (']', xs) -> Just ("]", xs)
-      Just _   -> Just (a, T.dropWhile (== ' ') b)
-        where (a, b) = T.break (`elem` ("[] " :: String)) xxs
-    )
 
 -- I ended these with an apostrophe, because they work on tokens, not Strings.
 satisfy' :: (Eq a, Show a) => (a -> Bool) -> Parsec [a] u a
